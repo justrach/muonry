@@ -230,8 +230,79 @@ Return only the JSON object."""
 
 # --- Patch ---
 async def apply_patch_tool(patch: str, cwd: str = ".") -> str:
+    """Apply a patch.
+
+    Accepts either Muonry patch envelope (*** Begin Patch ... *** End Patch)
+    or a standard unified diff (---/+++ @@ ...). Unified diffs are auto-wrapped
+    into the Muonry envelope for convenience.
+    """
+    def _auto_wrap_unified(diff: str) -> str | None:
+        txt = diff.replace("\r\n", "\n")
+        if "*** Begin Patch" in txt:
+            return None  # already wrapped
+        lines = txt.split("\n")
+        # Find first header lines
+        sections: list[dict] = []
+        i = 0
+        n = len(lines)
+        while i < n:
+            # skip diff metadata lines
+            if i < n and (lines[i].startswith("diff ") or lines[i].startswith("index ") or lines[i].startswith("old mode ") or lines[i].startswith("new mode ")):
+                i += 1
+                continue
+            if i + 1 < n and lines[i].startswith("--- ") and lines[i + 1].startswith("+++ "):
+                src = lines[i][4:].strip()
+                dst = lines[i + 1][4:].strip()
+                # ignore /dev/null or new file cases for now
+                if src == "/dev/null" or dst == "/dev/null":
+                    return None
+                # normalize a/ b/ prefixes and leading ./
+                for pfx in ("a/", "b/"):
+                    if src.startswith(pfx):
+                        src = src[len(pfx):]
+                    if dst.startswith(pfx):
+                        dst = dst[len(pfx):]
+                if src.startswith("./"):
+                    src = src[2:]
+                if dst.startswith("./"):
+                    dst = dst[2:]
+                i += 2
+                # collect hunks until next file header
+                hunks: list[str] = []
+                while i < n:
+                    ln = lines[i]
+                    if ln.startswith("--- ") and (i + 1 < n and lines[i + 1].startswith("+++ ")):
+                        break  # next file section
+                    if ln.startswith("@@") or (ln and ln[0] in {" ", "+", "-"}):
+                        hunks.append(ln)
+                    i += 1
+                if not hunks:
+                    return None
+                sections.append({"src": src, "dst": dst, "hunks": hunks})
+            else:
+                i += 1
+        if not sections:
+            return None
+        # Build Muonry envelope
+        out: list[str] = ["**_ Begin Patch"]
+        for s in sections:
+            out.append(f"*** Update File: {s['src']}")
+            if s["dst"] != s["src"]:
+                out.append(f"_** Move to: {s['dst']}")
+            for h in s["hunks"]:
+                if h.startswith("@@"):
+                    out.append(f"@@ {h[2:].strip()}")
+                else:
+                    out.append(h)
+        out.append("_** End Patch")
+        return "\n".join(out) + "\n"
+
     try:
-        do_apply_patch(patch, cwd)
+        patch_to_apply = patch
+        wrapped = _auto_wrap_unified(patch)
+        if wrapped is not None:
+            patch_to_apply = wrapped
+        do_apply_patch(patch_to_apply, cwd)
         print(_success(f"🔧 Patch applied successfully in {cwd}"))
         return f"Patch applied successfully in {cwd}"
     except Exception as e:

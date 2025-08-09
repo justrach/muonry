@@ -16,6 +16,16 @@ import json
 import dotenv   
 import getpass
 import re
+import time
+from typing import Optional
+try:
+    import select  # POSIX readiness checks
+except Exception:  # pragma: no cover
+    select = None  # type: ignore
+try:
+    import msvcrt  # Windows console keyboard checks
+except Exception:  # pragma: no cover
+    msvcrt = None  # type: ignore
 
 # Load environment variables
 dotenv.load_dotenv()
@@ -559,21 +569,31 @@ class MuonryAssistant:
         print(_info("🔧 Registering coding tools..."))
         
         # Patch tool (PREFERRED for file modifications)
-        self.client.register_tool(
-            name="apply_patch",
-            func=apply_patch_tool,
-            description="PREFERRED tool for modifying existing files. Use patch format to add/update/delete content safely.",
-            parameters={
-                "type": "object",
-                "properties": {
-                    "patch": {
-                        "type": "string",
-                        "description": "Patch content in unified diff format between **_ Begin Patch and _** End Patch markers"
-                    }
-                },
-                "required": ["patch"]
-            }
-        )
+        # Register both canonical name and a compatibility alias without underscore.
+        for tool_name in ("apply_patch", "applypatch"):
+            self.client.register_tool(
+                name=tool_name,
+                func=apply_patch_tool,
+                description=(
+                    "PREFERRED for modifying existing files. Accepts Muonry patch envelope; "
+                    "also auto-wraps common unified diffs (---/+++ @@)."
+                ),
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "patch": {
+                            "type": "string",
+                            "description": "Patch content (Muonry patch or standard unified diff)"
+                        },
+                        "cwd": {
+                            "type": "string",
+                            "description": "Working directory for applying the patch (optional)"
+                        }
+                    },
+                    "required": ["patch"],
+                    "additionalProperties": False
+                }
+            )
         
         # Shell tool
         self.client.register_tool(
@@ -864,72 +884,109 @@ class MuonryAssistant:
         from datetime import datetime
         now_str = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S %Z%z")
         conversation = [{
-            "role": "system", 
-            "content": f"""You are Muonry, an expert coding assistant that helps with software development tasks efficiently and systematically.
+            "role": "system",
+            "content": f"""
+You are Muonry, a terminal-first AI coding assistant. You help the user get software work done quickly, safely, and pragmatically.
 
-🎯 **Your Approach:**
-- **Simple tasks:** Use `talk` to converse; use other tools as needed
-- **Complex tasks:** Use the planner tool first, then execute steps sequentially
-- **Always be practical and get things done**
+SAFETY
+- Never assist with malicious or harmful intent.
+- Prefer minimal, non-destructive actions; explain risks briefly when relevant.
 
-💡 **When to Use Planning:**
-Use the `planner` tool for complex tasks involving multiple files or steps:
-- "Create X files/stories/components"
-- "Build a complete application" 
-- "Generate multiple related files"
-- "Create a project with several parts"
+INTERACTION CONTRACT
+- If the user asks a question (how to perform a task), provide concise instructions only and then ask if they want you to perform them.
+- If the user gives a task/command:
+  - Simple tasks: execute directly without unnecessary questions.
+  - Complex tasks: ask brief, high-value clarifying questions only when necessary to proceed; otherwise plan and act.
+- Be concise. Prefer bullet points and short code blocks. Reference files and symbols using backticks.
 
-**Planning Workflow:**
-1. Call `planner(task="description")` to break down complex tasks
-2. Follow the generated plan step-by-step using appropriate tools
-3. Execute each step sequentially with write_file, apply_patch, etc.
+TOOLS (Muonry runtime)
+- talk: respond with markdown in terminal. Use for explanations and non-file outputs.
+- planner: break down complex tasks into steps; then execute sequentially.
+- apply_patch: PREFERRED for modifying existing files safely.
+- write_file: ONLY for creating new files when the user explicitly asks to save/create/export.
+- read_file, grep, search_replace: reading and simple text edits.
+- run_shell: non-interactive commands; avoid pagers; prefer options that prevent pagination.
+- smart_run_shell: run, analyze failures, suggest or apply safe fixes.
+- interactive_shell: use only for CLI wizards (short, scripted interactions), not for long interactive sessions.
+- quick_check, get_system_info, update_plan: diagnostics and planning helpers.
+- websearch (optional): Exa search. Off by default; requires `EXA_API_KEY` and install of optional extra `muonry[websearch]`. Must set `enabled=true`.
 
-🔧 **Available Tools:**
-- **Conversation:** talk (default for stories, explanations, brainstorming, Q&A)
-- **Planning:** planner (break down complex tasks into steps)
-- **File ops:** read_file, write_file (NEW files), apply_patch (PREFERRED for modifications)
-- **System:** run_shell, interactive_shell, smart_run_shell, quick_check, get_system_info, grep, search_replace  
-- **Development:** update_plan
- - **Web:** websearch (Exa web search; off by default — set enabled=true and provide EXA_API_KEY)
+SHELL & VCS POLICY
+- Do not change directories implicitly; prefer specifying working directory explicitly.
+- Avoid interactive/fullscreen commands unless explicitly asked; prefer flags that produce non-paginated output (e.g., set pager to cat or use --no-pager if available).
+- For git, avoid pagers and keep outputs concise.
 
-🧭 **When to Save vs. Talk:**
-- For conversational requests (tell a story, explain, discuss, brainstorm), call `talk(content=...)` and DO NOT create files.
-- Only use `write_file` if the user explicitly asks to save, create, write, or export to a file/path.
+SECRETS & SETTINGS
+- Never display secrets. If a command needs a secret, use an environment variable placeholder (e.g., {{FOO_API_KEY}}) and instruct the user to set it.
+- Keys are managed via /settings and persisted to `~/.muonry/.env` with 0600 perms.
 
-🚀 **Examples:**
-- Chat: "Tell me a story" → Use `talk` to narrate in terminal.
-- Simple: "Read config.json" → Use read_file directly
-- Complex: "Create 5 story files about Travis Scott" → Use planner first, then write_file for each story
+WHEN TO SAVE VS. TALK
+- Conversational requests → use talk. Do NOT create files.
+- Only create or modify files when asked or when required to complete the explicit task outcome.
 
-Be efficient, practical, and always deliver working solutions. Use planning when it helps organize complex work.
+PLANNING WORKFLOW (for complex tasks)
+1) Call planner with the high-level task.
+2) Execute steps sequentially using apply_patch/write_file/run_shell/etc.
+3) Keep actions minimal and verifiable; show progress succinctly.
 
-Current OS: {OS_INFO}
-Current Datetime: {now_str}"""
+OUTPUT STYLE
+- Markdown-friendly. Use short bullets. Reference paths like `path/to/file.py`.
+- Keep context trimmed. Be explicit about assumptions.
+
+WEB SEARCH
+- Only use `websearch` if explicitly enabled and configured. No browsing beyond Exa API.
+
+RUNTIME
+- Primary model: groq/moonshotai/kimi-k2-instruct; fallback: cerebras/qwen-3-coder-480b (auto on rate-limit).
+- Context trimming keeps the latest turns under budget.
+
+FRONTEND BRANDING (when editing web UI)
+- Choose style by context, not always developer-only.
+- Modes and font options (use open licenses when possible):
+  - Marketing Landing: Space Grotesk / Sora / Outfit / Geist Sans for headlines and UI; strong CTAs; allow tasteful text gradients.
+  - Developer/Docs: IBM Plex Mono / JetBrains Mono / Fira Code; monospace accents; high contrast; minimal gradients.
+  - App/Dashboard: Inter / Geist Sans / IBM Plex Sans; compact UI, subtle cards, clear focus rings.
+  - Blog/Longform: Source Serif Pro / IBM Plex Serif for body; Inter/Geist Sans for UI; comfortable reading width.
+- Palette: white base with cyan–magenta brand accents; ensure accessible contrast; support dark mode.
+- Gradients: sparingly; text (#06b6d4 → #d946ef), panels (rgba(6,182,212,0.2) → rgba(217,70,239,0.12)); avoid heavy motion.
+- Accessibility: keyboard focus-visible rings, prefers-reduced-motion, legible sizes.
+- No vendor lockups by default; do not add “Powered by …” unless the user asks.
+
+Environment OS: {OS_INFO}
+Current Datetime: {now_str}
+"""
         }]
         while True:
             try:
-                user_input = input(_style("\n💬 You: ", color=_Ansi.CYAN, bold=True)).strip()
-                if not user_input:
+                user_input = self._smart_read_input()
+                if user_input is None:
+                    # EOF (e.g., Ctrl-D) — exit gracefully
+                    print(_success("\n👋 Goodbye!"))
+                    break
+                # Keep a trimmed copy for command checks, but preserve original
+                trimmed = user_input.strip()
+                if not trimmed:
                     continue
 
                 # Commands
-                if user_input.lower() in ['quit', 'exit', 'bye']:
+                if trimmed.lower() in ['quit', 'exit', 'bye']:
                     print(_success("👋 Goodbye!"))
                     break
-                if user_input.strip().lower() in {'/settings', 'settings'}:
+                if trimmed.lower() in {'/settings', 'settings'}:
                     _settings_menu()
                     continue
 
                 # Fast local Markdown preview: md <file>
                 try:
-                    tokens = shlex.split(user_input)
+                    # Only parse tokens for single-line commands
+                    tokens = shlex.split(trimmed)
                 except Exception:
-                    tokens = user_input.split()
+                    tokens = trimmed.split()
                 if tokens and tokens[0].lower() in {"md", "viewmd"}:
                     if len(tokens) < 2:
                         print(_warn("Usage: md <path-to-markdown>"))
                         continue
-                    path_arg = user_input[len(tokens[0]):].strip()
+                    path_arg = trimmed[len(tokens[0]):].strip()
                     # Handle unquoted paths with spaces by using the remainder string
                     path_str = path_arg.strip()
                     p = Path(path_str)
@@ -964,6 +1021,115 @@ Current Datetime: {now_str}"""
 
             except KeyboardInterrupt:
                 print(_success("\n👋 Goodbye!"))
+
+    # --- Improved input handling (supports Ctrl+V multi-line paste and /paste mode) ---
+    def _smart_read_input(self) -> Optional[str]:
+        """Read user input robustly.
+
+        - Captures multi-line pastes (Ctrl+V) by draining stdin for a short window.
+        - Supports explicit paste mode: type `/paste` to enter, then finish with a line `EOF` or ```.
+        - Strips terminal bracketed-paste markers if present.
+        - Returns None on EOF (Ctrl-D) to signal exit.
+        """
+        prompt = _style("\n💬 You: ", color=_Ansi.CYAN, bold=True)
+        try:
+            first_line = input(prompt)
+        except EOFError:
+            return None
+        except KeyboardInterrupt:
+            raise
+
+        # Explicit paste mode
+        if first_line.strip().lower() in {"/paste", ":paste", "paste"}:
+            print(_style("Paste multi-line text. End with `EOF` or ``` on its own line.", color=_Ansi.BLUE, dim=True))
+            lines: list[str] = []
+            while True:
+                try:
+                    ln = input()
+                except EOFError:
+                    # Treat EOF as finish
+                    break
+                except KeyboardInterrupt:
+                    print(_warn("Paste cancelled."))
+                    return ""
+                if ln.strip() in {"EOF", "```"}:
+                    break
+                lines.append(ln)
+            content = "\n".join(lines)
+            return self._clean_paste_text(content)
+
+        # Greedy-drain stdin for fast multi-line paste (POSIX) or best-effort on Windows
+        extra = self._drain_stdin_lines(max_idle_ms=120)
+        if extra:
+            full = "\n".join([first_line] + extra)
+            return self._clean_paste_text(full)
+        return self._clean_paste_text(first_line)
+
+    def _drain_stdin_lines(self, max_idle_ms: int = 120) -> list[str]:
+        """Collect additional lines already queued in stdin.
+
+        Reads lines while input is immediately available, stopping after a short idle period.
+        """
+        lines: list[str] = []
+        deadline = time.time() + (max_idle_ms / 1000.0)
+
+        # POSIX: use select() on stdin
+        if select is not None and hasattr(select, "select") and os.name == "posix":
+            while True:
+                now = time.time()
+                if now >= deadline:
+                    break
+                timeout = max(0.0, deadline - now)
+                r, _, _ = select.select([sys.stdin], [], [], timeout)
+                if not r:
+                    break
+                try:
+                    ln = sys.stdin.readline()
+                except Exception:
+                    break
+                if ln == "":
+                    break
+                # Remove trailing newline to align with input()
+                if ln.endswith("\n"):
+                    ln = ln[:-1]
+                lines.append(ln)
+                # extend deadline slightly while data flows
+                deadline = time.time() + (max_idle_ms / 1000.0)
+            return lines
+
+        # Windows best-effort: read while keys are available (line-buffered approximation)
+        if msvcrt is not None and os.name == "nt":  # pragma: no cover (platform-specific)
+            buf = ""
+            while time.time() < deadline and msvcrt.kbhit():
+                ch = msvcrt.getwche()
+                if ch:
+                    buf += ch
+                else:
+                    time.sleep(0.01)
+                    continue
+                # extend while data flows
+                deadline = time.time() + (max_idle_ms / 1000.0)
+            # Split any captured buffer into lines
+            if buf:
+                # Normalize newlines to \n then split
+                buf = buf.replace("\r\n", "\n").replace("\r", "\n")
+                parts = buf.split("\n")
+                # msvcrt read includes the newline characters; align with input() behavior
+                if parts and parts[-1] == "":
+                    parts.pop()
+                return parts
+        return lines
+
+    def _clean_paste_text(self, text: str) -> str:
+        """Normalize pasted text: strip bracketed paste markers, normalize newlines."""
+        if not text:
+            return text
+        # Remove XTerm bracketed paste markers if present
+        text = text.replace("\x1b[200~", "").replace("\x1b[201~", "")
+        # Normalize CRLF/CR to LF
+        text = text.replace("\r\n", "\n").replace("\r", "\n")
+        # Avoid accidental trailing newlines explosion; keep original internal newlines
+        return text
                 break
             except Exception as e:
                 print(_error(f"\n❌ Error: {e}"))

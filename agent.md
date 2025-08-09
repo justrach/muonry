@@ -5,11 +5,10 @@ This project is a **simplified, sequential AI coding assistant** with optional p
 ## Root Directory (`/muonry`)
 
 - **`agent.md`** - This file: comprehensive documentation about capabilities and usage
-- **`assistant.py`** - **Main sequential assistant** (648 lines) with optional planning
+- **`assistant.py`** - **Main sequential assistant** (with optional planning and /settings)
 - **`README.md`** - Project overview and basic setup instructions
 - **`tools/toolset.py`** - Consolidated tool implementations (planner, shell, patching, file ops, quick checks, interactive shell, websearch)
-- **`.env`** - Environment variables for configuration (API keys, etc.)
-- **`improvements.md`** - Log of planned improvements and features
+- **`~/.muonry/.env`** - User-level secrets (GROQ, CEREBRAS, EXA) managed by CLI; created on first run with `0600` perms
 
 ## Key Directories
 
@@ -20,7 +19,7 @@ Contains utility modules and helper functions:
 - `shell.py`: Shell command execution and management
 - `apply_patch.py`: Advanced file patching tool
 - `update_plan.py`: Plan management utilities
-- `websearch.py`: Exa-powered web search tool (off by default; requires `EXA_API_KEY`)
+- `websearch.py`: Exa-powered web search tool (optional extra; requires `EXA_API_KEY`)
 - `orchestrator.py`: ⚠️ Deprecated (excluded from active codebase)
 
 ## 📊 **Project Statistics** (excluding deprecated orchestrator)
@@ -59,7 +58,7 @@ Contains utility modules and helper functions:
  - **Quick project checks** with `quick_check` (validate Python/Rust/JS projects)
 
 ### **🌐 Web Search (Optional)**
-- **Exa web search** with `websearch` (off by default). Requires `EXA_API_KEY` or an explicit `api_key` parameter. Returns structured JSON results and includes a fallback parser that extracts Title/URL pairs when providers return text blocks.
+- **Exa web search** with `websearch` (off by default). Install optional extra: `pip install "muonry[websearch]"`. Requires `EXA_API_KEY` (or pass `api_key`). Returns structured JSON results and includes a fallback parser that extracts Title/URL pairs when providers return text blocks.
 
 ### **🧠 AI-Powered Planning**
 - **Complex task breakdown** with `planner` (e.g., "Create 6 Fire Nation stories")
@@ -85,7 +84,7 @@ Contains utility modules and helper functions:
 - **Error analysis** with detailed suggestions
 
 ### **💬 Conversational Features**
-- **Interactive chat** mode (run `python assistant.py`)
+- **Interactive chat** mode via console script (`muonry`) or module (`python -m muonry.cli`)
 - **Markdown rendering** in terminal
 - **Conversational responses** using `talk` tool
 - **Storytelling and explanations** without file creation
@@ -132,13 +131,25 @@ Contains utility modules and helper functions:
 🔎 Using websearch (enabled=true)...
 📄 Returning JSON results from Exa
 ```
-
 Parameters:
 - query: search query string
 - enabled: must be true to execute the search (default false)
 - api_key: override API key (otherwise uses `EXA_API_KEY`)
 - text: include text contents (default true)
 - type: Exa search type (default "auto")
+
+## 📦 Packaging & Publishing
+
+- Universal wheel (`py3-none-any`) with `requires-python >= 3.10` (3.10–3.13 supported)
+- Optional dependencies:
+  - `websearch`: installs `exa_py`
+  - `llm`: installs `bhumi`
+- CLI entry point: `muonry = muonry.cli:main`
+- URLs: Homepage `https://github.com/justrach/muonry`, Website `https://muonry.com`
+- Build: `python -m build` → dist/*.whl, dist/*.tar.gz
+- Upload:
+  - TestPyPI: `twine upload --repository-url https://test.pypi.org/legacy/ dist/*`
+  - PyPI: `twine upload dist/*`
 
 ## 🚨 **What Muonry Cannot Do**
 - ❌ Concurrent execution (intentionally sequential for reliability)
@@ -160,16 +171,32 @@ Parameters:
 
 ### **Interactive Mode**
 ```bash
-python assistant.py
+muonry
+# or: python -m muonry.cli
 ```
 
 ### **Environment Setup**
-```bash
-export GROQ_API_KEY=your_groq_key
-export CEREBRAS_API_KEY=your_cerebras_key  # Optional for planning
-export EXA_API_KEY=your_exa_key            # Optional for websearch
-export MUONRY_MAX_CONTEXT_CHARS=120000     # Optional context cap (chars)
+Preferred: use the in-app settings menu.
 ```
+# Inside Muonry prompt
+/settings  # View/set/clear GROQ_API_KEY, CEREBRAS_API_KEY, EXA_API_KEY
+```
+Advanced: edit `~/.muonry/.env` directly (created on first run, `0600` perms).
+```env
+GROQ_API_KEY=...
+CEREBRAS_API_KEY=...   # optional
+EXA_API_KEY=...        # optional (for websearch)
+MUONRY_MAX_CONTEXT_CHARS=120000  # optional
+```
+
+### **Provider Links**
+- **Groq**: https://groq.com (sign in → console)
+- **Cerebras**: https://www.cerebras.ai
+- **Exa (websearch)**: https://exa.ai
+
+### **Optional Extras**
+- Base install (lean): `pip install muonry`
+- Enable websearch: `pip install "muonry[websearch]"`
 
 ### **Quick Commands**
 - `python assistant.py` → Start interactive chat
@@ -183,42 +210,34 @@ export MUONRY_MAX_CONTEXT_CHARS=120000     # Optional context cap (chars)
 4. **Keep conversations focused** - Each session should have a clear goal
 5. **Save important work** - Use `write_file` for permanent changes
 
----
-
-## Usage Patterns
-
-- **Simple Tasks**: `"Read config.json"` → Direct tool usage
-- **Complex Tasks**: `"Create 6 Fire Nation stories"` → Planner + sequential execution
-- **Configuration**: Environment settings via `.env` file
-- **Reliability**: No worker coordination or orchestration complexity
-- **Development Flow**: New features are typically added by creating new agent files in `agents/` or extending existing ones
-- **Modularity**: The structure supports adding new capabilities without modifying core files
-- **Testing**: Individual agents can be tested independently before integration
-
-## File Relationships
-- `assistant.py` imports and registers tools from `tools/` (e.g., `websearch`, `apply_patch`, `shell`).
-- Shared utilities and additional tools live under `tools/`.
-
-## ✅ **COMPLETED: Simplified Architecture**
-
-### ✅ **Planning System Implementation**
-- [x] ✅ Created planner tool with Cerebras integration
-- [x] ✅ Implemented robust JSON parsing (orjson + Satya)
-- [x] ✅ Added sequential task execution
-- [x] ✅ Removed broken orchestrator complexity
-- [x] ✅ Tested with multi-file story generation
-- [x] ✅ Documented simplified usage patterns
-
-### 🚀 **Architecture Benefits**
-- **Reliability:** No coordination failures or worker idle states
-- **Simplicity:** Clean, understandable execution flow
-- **Planning:** Optional AI-powered task breakdown
-- **Performance:** Sequential execution without race conditions
-- **Maintainability:** Single assistant file vs complex orchestrator
-- Configuration flows from `.env` to the main application and then to individual agents
-
 ## 🆕 Recent Enhancements
+- **/settings menu**: View/set/clear keys in `~/.muonry/.env` with provider links.
+- **Optional websearch extra**: `muonry[websearch]` for Exa SDK; graceful runtime handling when missing.
 - **Rate-limit fallback**: Automatic retry with a fallback model on rate-limit.
 - **Context trimming**: Sliding-window strategy prevents context overflow errors.
 - **Satya validation**: Robust conversion for planner steps (dict/model-safe).
 - **Websearch parsing**: Structured output with fallback Title/URL extraction.
+
+## 🌐 Frontend Roadmap
+
+### Phase 1: Local HTTP API (FastAPI)
+- Endpoints:
+  - `POST /chat` → send a message, returns assistant reply (streaming SSE optional)
+  - `POST /tools/{name}` → invoke a tool (restricted/allowlist)
+  - `GET /health` → readiness
+- Reuse current assistant core; wrap interactive loop calls in async handlers.
+- Auth: local-only by default; optional token for remote access.
+
+### Phase 2: Web UI (React/Vite)
+- Minimal chat UI with history, markdown rendering, tool call badges
+- Settings page to manage keys (reads/writes `~/.muonry/.env` via API)
+- Websearch toggle; debug panel for tool logs
+
+### Phase 3: Packaging & Deploy
+- Run as `muonry serve` to start API/UI
+- Static build served by FastAPI or separate dev server
+- Optional Docker image with non-root user and bind-mounted `~/.muonry/.env`
+
+### Notes
+- Keep websearch optional; UI should reflect feature availability
+- Preserve sequential execution model; show step-by-step progress
