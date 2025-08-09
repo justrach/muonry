@@ -146,26 +146,31 @@ export default function Home() {
             Try refactoring code on the left; Muonry explains and improves on the right.
           </p>
           <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Left: Replace editor placeholder with a video */}
+            {/* Left: Simple text description of tool flow */}
             <div className="rounded-lg border border-border p-4">
-              <div className="text-xs text-muted-foreground mb-2 font-jetbrains">Code Editor (Video)</div>
-              <div className="relative aspect-video w-full rounded-lg border border-border bg-gradient-to-br from-cyan-600/20 via-fuchsia-500/10 to-transparent">
-                <div className="absolute inset-0 grid place-items-center">
-                  <button
-                    aria-label="Play editor demo"
-                    className="relative inline-flex h-14 w-14 items-center justify-center rounded-full bg-background/80 backdrop-blur border border-border shadow-lg hover:scale-105 transition"
-                  >
-                    <span className="text-cyan-400 text-xl">▶</span>
-                  </button>
-                </div>
+              <div className="text-xs text-muted-foreground mb-2 font-jetbrains">How It Works</div>
+              <div className="prose prose-invert max-w-none text-sm leading-relaxed">
+                <p>
+                  You ask for a change (e.g., “Refactor function X”). Muonry plans the task and applies it to your repo using safe, auditable tool calls:
+                </p>
+                <ul className="list-disc pl-5 space-y-1">
+                  <li><code>read_file</code> / <code>grep</code>: find code and gather context.</li>
+                  <li><code>apply_patch</code>: make precise edits via small diffs.</li>
+                  <li><code>run_shell</code> / <code>smart_run_shell</code>: run builds/tests; suggest or apply safe fixes.</li>
+                  <li><code>update_plan</code>: keep a short, evolving TODO of steps.</li>
+                  <li><code>interactive_shell</code>: only for short CLI wizards (e.g., scaffolding).</li>
+                </ul>
+                <p>
+                  Everything happens locally in your workspace. Secrets aren’t printed, and destructive actions are avoided unless you ask for them.
+                </p>
               </div>
             </div>
 
             {/* Right: Keep response panel for now */}
             <div className="rounded-lg border border-border p-4 min-h-56">
               <div className="text-xs text-muted-foreground mb-2 font-jetbrains">Muonry Response</div>
-              <div className="h-40 rounded bg-muted/50 border border-dashed border-border grid place-items-center text-muted-foreground text-sm font-jetbrains">
-                Response placeholder
+              <div className="h-40 rounded bg-muted/50 border border-dashed border-border p-4 text-muted-foreground text-sm font-jetbrains leading-relaxed">
+                Muonry explains what it’s doing, shows patches it applies, and summarizes build/test output. You can stop at any time or ask it to continue.
               </div>
             </div>
           </div>
@@ -201,13 +206,30 @@ export default function Home() {
           <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="rounded-lg border border-border p-5">
               <div className="text-sm text-muted-foreground">Contributors</div>
-              <div className="mt-3 flex -space-x-2">
-                {Array.from({ length: 5 }).map((_, i) => (
+              <div className="mt-3 flex -space-x-2 items-center">
+                {/* Lead contributor */}
+                <a
+                  href="https://github.com/justrach"
+                  target="_blank"
+                  rel="noreferrer"
+                  title="justrach"
+                  className="block h-8 w-8 overflow-hidden rounded-full border border-border ring-1 ring-border/60"
+                >
+                  <img
+                    src="https://github.com/justrach.png?size=64"
+                    alt="justrach"
+                    className="h-full w-full object-cover"
+                  />
+                </a>
+                {/* Placeholder contributors */}
+                {Array.from({ length: 4 }).map((_, i) => (
                   <div
                     key={i}
-                    className="h-8 w-8 rounded-full bg-muted border border-border"
-                    title="Contributor"
-                  />
+                    className="h-8 w-8 rounded-full bg-muted border border-border grid place-items-center text-[10px] text-muted-foreground/80"
+                    title="(this could be you)"
+                  >
+                    +
+                  </div>
                 ))}
               </div>
             </div>
