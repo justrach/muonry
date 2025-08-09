@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "muonry"
+version = "0.1.0"
+description = "Muonry - Sequential AI coding assistant with planning, websearch, and resilient fallbacks"
+readme = "README.md"
+authors = [{ name = "Muonry Contributors" }]
+requires-python = ">=3.10"
+dependencies = [
+  "python-dotenv>=1.0.0",
+  "orjson>=3.9.0",
+]
+keywords = ["ai", "assistant", "coding", "cli", "llm"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Environment :: Console",
+  "Topic :: Software Development :: Libraries",
+  "Topic :: Software Development :: Code Generators",
+]
+
+[project.urls]
+Homepage = "https://github.com/justrach/muonry"
+Website = "https://muonry.com"
+
+[project.scripts]
+muonry = "muonry.cli:main"
+
+[project.optional-dependencies]
+llm = [
+  "bhumi>=0.0.0",
+]
+websearch = [
+  "exa_py>=1.0.0",
+]
+
+[tool.setuptools]
+# Include top-level module and packages
+py-modules = ["assistant"]
+packages = ["tools", "muonry"]
+
+[tool.setuptools.package-data]
+# No data files by default

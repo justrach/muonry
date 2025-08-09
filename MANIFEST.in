@@ -1,0 +1,8 @@
+# Include project docs
+include README.md
+include agent.md
+
+# Exclude environment files from sdists
+exclude .env
+exclude tools/.env
+global-exclude *.env
