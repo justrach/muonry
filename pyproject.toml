@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "muonry"
-version = "0.1.1"
+version = "0.1.2"
 description = "Muonry - Sequential AI coding assistant with planning, websearch, and resilient fallbacks"
 readme = "README.md"
 authors = [{ name = "Muonry Contributors" }]

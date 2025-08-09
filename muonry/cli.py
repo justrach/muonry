@@ -85,4 +85,16 @@ def main() -> None:
     _ensure_home_env()
     # Import after env is ensured
     from assistant import main as assistant_main  # type: ignore
-    asyncio.run(assistant_main())
+    try:
+        asyncio.run(assistant_main())
+    except KeyboardInterrupt:
+        # Quiet exit on Ctrl-C
+        pass
+    except Exception as e:  # Swallow benign cancellation during shutdown
+        try:
+            import asyncio as _asyncio
+            if isinstance(e, _asyncio.CancelledError):
+                return
+        except Exception:
+            pass
+        raise

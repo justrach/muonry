@@ -119,7 +119,7 @@ export default function Home() {
               <div className="text-2xl">⚡</div>
               <h3 className="mt-2 font-semibold font-plex">Fast & Lightweight</h3>
               <p className="mt-1 text-sm text-muted-foreground">
-                Built for low latency and minimal resources.
+                Built for low latency and minimal resources — written in Rust, with a tiny surface area you can reason about.
               </p>
             </div>
             <div className="rounded-lg border border-border p-5">
@@ -133,7 +133,7 @@ export default function Home() {
               <div className="text-2xl">🔗</div>
               <h3 className="mt-2 font-semibold font-plex">Extensible</h3>
               <p className="mt-1 text-sm text-muted-foreground">
-                Works with Python, JS, and more.
+                Bring your own provider under the hood — Groq, Cerebras, OpenRouter, and more. Works with Python, JS, and beyond.
               </p>
             </div>
           </div>
@@ -161,7 +161,7 @@ export default function Home() {
                   <li><code>interactive_shell</code>: only for short CLI wizards (e.g., scaffolding).</li>
                 </ul>
                 <p>
-                  Everything happens locally in your workspace. Secrets aren’t printed, and destructive actions are avoided unless you ask for them.
+                  Everything happens locally in your workspace. You can use any LLM provider by setting API keys (Groq, Cerebras, OpenRouter, etc.). Secrets aren’t printed, and destructive actions are avoided unless you ask for them.
                 </p>
               </div>
             </div>

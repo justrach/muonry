@@ -487,6 +487,8 @@ class MuonryAssistant:
             self.max_context_chars = int(os.getenv("MUONRY_MAX_CONTEXT_CHARS", "120000"))
         except Exception:
             self.max_context_chars = 120000
+        # Track Ctrl-C presses for double-press-to-exit behavior
+        self._last_interrupt_at: float = 0.0
         
     async def setup(self):
         """Initialize the assistant with OpenRouter"""
@@ -960,8 +962,7 @@ Current Datetime: {now_str}
             try:
                 user_input = self._smart_read_input()
                 if user_input is None:
-                    # EOF (e.g., Ctrl-D) — exit gracefully
-                    print(_success("\n👋 Goodbye!"))
+                    # EOF (e.g., Ctrl-D) — exit quietly
                     break
                 # Keep a trimmed copy for command checks, but preserve original
                 trimmed = user_input.strip()
@@ -970,7 +971,6 @@ Current Datetime: {now_str}
 
                 # Commands
                 if trimmed.lower() in ['quit', 'exit', 'bye']:
-                    print(_success("👋 Goodbye!"))
                     break
                 if trimmed.lower() in {'/settings', 'settings'}:
                     _settings_menu()
@@ -1020,7 +1020,13 @@ Current Datetime: {now_str}
                     conversation = conversation[-20:]
 
             except KeyboardInterrupt:
-                print(_success("\n👋 Goodbye!"))
+                now = time.time()
+                if self._last_interrupt_at and (now - self._last_interrupt_at) < 2.0:
+                    # Exit quietly on second Ctrl-C
+                    break
+                # First Ctrl-C: brief hint; second within 2s exits
+                self._last_interrupt_at = now
+                print(_warn("\nInterrupted. Press Ctrl-C again to exit."))
 
     # --- Improved input handling (supports Ctrl+V multi-line paste and /paste mode) ---
     def _smart_read_input(self) -> Optional[str]:
@@ -1130,10 +1136,6 @@ Current Datetime: {now_str}
         text = text.replace("\r\n", "\n").replace("\r", "\n")
         # Avoid accidental trailing newlines explosion; keep original internal newlines
         return text
-                break
-            except Exception as e:
-                print(_error(f"\n❌ Error: {e}"))
-                print(_warn("Let's continue..."))
     
 
 
@@ -1145,4 +1147,8 @@ async def main():
         print(_error("Failed to initialize assistant"))
         
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        # Quiet exit on Ctrl-C at top-level
+        pass
