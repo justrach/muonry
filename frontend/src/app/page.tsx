@@ -65,24 +65,21 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Video placeholder */}
+          {/* Video */}
           <div id="video" className="relative">
-            <div className="aspect-video w-full rounded-xl border border-border bg-gradient-to-br from-cyan-600/20 via-fuchsia-500/10 to-transparent">
-              <div className="absolute inset-0 grid place-items-center">
-                <div className="relative">
-                  <div className="absolute -inset-6 rounded-full bg-cyan-400/20 blur-xl" />
-                  <button
-                    aria-label="Play video"
-                    className="relative mx-auto inline-flex h-16 w-16 items-center justify-center rounded-full bg-background/80 backdrop-blur border border-border shadow-lg hover:scale-105 transition"
-                  >
-                    <span className="text-cyan-400 text-2xl">▶</span>
-                  </button>
-                </div>
-              </div>
-              <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-background/80 to-transparent" />
+            <div className="relative aspect-video w-full overflow-hidden rounded-xl border border-border">
+              <video
+                src="https://images.muonry.com/muon2.mp4"
+                className="h-full w-full object-cover"
+                autoPlay
+                muted
+                loop
+                playsInline
+              />
+              <div className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-background/80 to-transparent" />
             </div>
             <p className="mt-3 text-center text-xs text-muted-foreground font-jetbrains">
-              Static thumbnail — neon code editor vibe with muon particles.
+              Demo: Muonry in action.
             </p>
           </div>
         </section>

@@ -11,6 +11,15 @@ const compat = new FlatCompat({
 
 const eslintConfig = [
   ...compat.extends("next/core-web-vitals", "next/typescript"),
+  {
+    // Project overrides
+    rules: {
+      // Allow plain quotes/apostrophes in JSX content
+      "react/no-unescaped-entities": "off",
+      // Allow <a href="/"> in app router when intentional
+      "@next/next/no-html-link-for-pages": "off",
+    },
+  },
 ];
 
 export default eslintConfig;

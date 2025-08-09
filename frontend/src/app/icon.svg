@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- High‑res cyan dot favicon (Tailwind cyan-400 #22d3ee) -->
+  <defs>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#22d3ee" stop-opacity="0.8"/>
+      <stop offset="60%" stop-color="#22d3ee" stop-opacity="0.15"/>
+      <stop offset="100%" stop-color="#22d3ee" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <!-- Soft glow -->
+  <circle cx="512" cy="512" r="280" fill="url(#glow)"/>
+  <!-- Core dot -->
+  <circle cx="512" cy="512" r="180" fill="#22d3ee"/>
+</svg>
+
