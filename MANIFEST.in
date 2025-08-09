@@ -1,6 +1,7 @@
 # Include project docs
 include README.md
 include agent.md
+include LICENSE
 
 # Exclude environment files from sdists
 exclude .env
