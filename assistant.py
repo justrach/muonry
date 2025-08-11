@@ -558,8 +558,8 @@ class MuonryAssistant:
         # Switch to fallback model and retry once
         print(_warn(f"Rate limit encountered on {self.client.config.model if hasattr(self.client, 'config') else 'primary model'}; switching to {self.fallback_model} and retrying once..."))
         try:
-            api_key = os.getenv("GROQ_API_KEY")
-            fb_config = LLMConfig(api_key=api_key, model=self.fallback_model, debug=True)
+            cerebras_api_key = os.getenv("CEREBRAS_API_KEY")
+            fb_config = LLMConfig(api_key=cerebras_api_key, model=self.fallback_model, debug=True)
             self.client = BaseLLMClient(fb_config)
         except Exception as e:
             print(_error(f"Failed to switch to fallback model: {e}"))
