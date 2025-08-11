@@ -13,6 +13,8 @@ license = { file = "LICENSE" }
 dependencies = [
   "python-dotenv>=1.0.0",
   "orjson>=3.9.0",
+  "bhumi>=0.0.0",
+  "satya>=0.2.16",
 ]
 keywords = ["ai", "assistant", "coding", "cli", "llm"]
 classifiers = [
@@ -36,11 +38,11 @@ Website = "https://muonry.com"
 muonry = "muonry.cli:main"
 
 [project.optional-dependencies]
-llm = [
-  "bhumi>=0.0.0",
-]
 websearch = [
   "exa_py>=1.0.0",
+]
+mcp = [
+  "mcp[cli]",
 ]
 
 [tool.setuptools]

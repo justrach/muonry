@@ -20,6 +20,8 @@ from tools.shell import run_shell, ShellRequest
 from tools.update_plan import load_plan, update_plan as do_update_plan, PlanItem, Status
 from tools.build_analyzer import analyze_build_output, pick_package_manager
 
+from tools.mcp_client import mcp_list_tools as _mcp_list_tools, mcp_call_tool as _mcp_call_tool
+
 # --- Minimal helpers (no ANSI formatting to avoid dependency on assistant) ---
 
 def _info(msg: str) -> str: return msg
@@ -79,22 +81,15 @@ async def planner_tool(task: str, context: str = "") -> str:
         import orjson
         import json as builtin_json
 
-        # Optional Satya schema validation
-        try:
-            from satya import Field, Model
+        from satya import Field, Model
 
-            class PlanningStep(Model):
-                id: int = Field(description="Step ID number")
-                description: str = Field(description="Step description")
-                file_path: str = Field(description="Target file path")
+        class PlanningStep(Model):
+            id: int = Field(description="Step ID number")
+            description: str = Field(description="Step description")
+            file_path: str = Field(description="Target file path")
 
-            class PlanningPlan(Model):
-                steps: list[PlanningStep] = Field(description="List of planning steps")
-
-            satya_available = True
-        except Exception:
-            satya_available = False
-            print(_warn("⚠️ Satya not available - using basic validation"))
+        class PlanningPlan(Model):
+            steps: list[PlanningStep] = Field(description="List of planning steps")
 
         planning_config = LLMConfig(
             api_key=os.getenv("CEREBRAS_API_KEY"),
@@ -179,36 +174,32 @@ Return only the JSON object."""
                     plan_data = builtin_json.loads(m.group(0))
                     print(_success("✅ Parsed with regex + builtin json"))
 
-        if satya_available:
-            try:
-                # type: ignore[name-defined]
-                plan = PlanningPlan(**plan_data)
-                # Convert Satya/Pydantic model instances or dict-like steps into plain dicts
-                steps: list[dict] = []
-                for s in getattr(plan, "steps", []) or []:
-                    s_dict: dict
-                    try:
-                        if hasattr(s, "dict") and callable(getattr(s, "dict")):
-                            s_dict = s.dict()  # type: ignore[attr-defined]
-                        elif hasattr(s, "model_dump") and callable(getattr(s, "model_dump")):
-                            s_dict = s.model_dump()  # type: ignore[attr-defined]
-                        elif isinstance(s, dict):
-                            s_dict = s
-                        else:
-                            # Fallback to attribute access
-                            s_dict = {
-                                "id": getattr(s, "id", None),
-                                "description": getattr(s, "description", None),
-                                "file_path": getattr(s, "file_path", None),
-                            }
-                    except Exception:
-                        s_dict = {}
-                    steps.append(s_dict)
-                print(_success(f"✅ Satya validation successful - {len(steps)} steps"))
-            except Exception as e:
-                print(_warn(f"⚠️ Satya validation failed: {e}"))
-                steps = plan_data.get("steps", [])
-        else:
+        try:
+            plan = PlanningPlan(**plan_data)
+            # Convert Satya/Pydantic model instances or dict-like steps into plain dicts
+            steps: list[dict] = []
+            for s in getattr(plan, "steps", []) or []:
+                s_dict: dict
+                try:
+                    if hasattr(s, "dict") and callable(getattr(s, "dict")):
+                        s_dict = s.dict()  # type: ignore[attr-defined]
+                    elif hasattr(s, "model_dump") and callable(getattr(s, "model_dump")):
+                        s_dict = s.model_dump()  # type: ignore[attr-defined]
+                    elif isinstance(s, dict):
+                        s_dict = s
+                    else:
+                        # Fallback to attribute access
+                        s_dict = {
+                            "id": getattr(s, "id", None),
+                            "description": getattr(s, "description", None),
+                            "file_path": getattr(s, "file_path", None),
+                        }
+                except Exception:
+                    s_dict = {}
+                steps.append(s_dict)
+            print(_success(f"✅ Satya validation successful - {len(steps)} steps"))
+        except Exception as e:
+            print(_warn(f"⚠️ Satya validation failed: {e}"))
             if "steps" not in plan_data:
                 return "❌ Error: Invalid plan format - missing 'steps' array"
             steps = plan_data["steps"]
@@ -808,3 +799,36 @@ async def write_file_tool(file_path: str, content: str, overwrite: bool = True) 
         return f"Successfully wrote {len(content)} characters to {file_path}"
     except Exception as e:
         return f"Error writing file {file_path}: {str(e)}"
+
+
+# --- MCP client wrappers ---
+async def mcp_list_tools_tool(
+    server_command: str,
+    args: list[str] | None = None,
+    env: dict | None = None,
+) -> str:
+    """List tools from an MCP server via stdio.
+
+    Parameters
+    - server_command: Executable to launch the MCP server (e.g., "uv" or path to server)
+    - args: Optional argv for the server (e.g., ["run", "server", "fastmcp_quickstart", "stdio"]).
+    - env: Optional environment variables for the server process.
+    """
+    try:
+        return await _mcp_list_tools(server_command, args=args, env=env)
+    except Exception as e:
+        return f"Error listing MCP tools: {e}"
+
+
+async def mcp_call_tool_tool(
+    server_command: str,
+    tool: str,
+    arguments: dict | None = None,
+    args: list[str] | None = None,
+    env: dict | None = None,
+) -> str:
+    """Call a tool on an MCP server via stdio and return JSON string result."""
+    try:
+        return await _mcp_call_tool(server_command, tool, arguments=arguments or {}, args=args, env=env)
+    except Exception as e:
+        return f"Error calling MCP tool '{tool}': {e}"

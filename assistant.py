@@ -462,6 +462,36 @@ async def get_system_info_tool() -> str:
 async def quick_check_tool(kind: str, target: str = ".", max_files: int = 200, timeout_ms: int = 120000) -> str:
     return await toolset.quick_check_tool(kind, target, max_files, timeout_ms)
 
+async def quickcheck_tool(**params) -> str:
+    """Alias wrapper to accept normalized names without underscores.
+
+    Accepts: kind, target, maxfiles, timeoutms (and also max_files, timeout_ms).
+    """
+    kind = params.get("kind")
+    target = params.get("target", ".")
+    max_files = params.get("max_files", params.get("maxfiles", 200))
+    timeout_ms = params.get("timeout_ms", params.get("timeoutms", 120000))
+    # Infer kind from target if not provided
+    if not kind and isinstance(target, str):
+        tl = target.lower()
+        if tl.endswith((".py", "/")):
+            kind = "python"
+        elif tl.endswith((".rs",)):
+            kind = "rust"
+        elif tl.endswith((".js", ".jsx", ".ts", ".tsx")):
+            kind = "js"
+    if not kind:
+        kind = "python"
+    try:
+        max_files = int(max_files)
+    except Exception:
+        max_files = 200
+    try:
+        timeout_ms = int(timeout_ms)
+    except Exception:
+        timeout_ms = 120000
+    return await toolset.quick_check_tool(str(kind), str(target), max_files, timeout_ms)
+
 async def interactive_shell_tool(
     command: str,
     workdir: str | None = None,
@@ -475,6 +505,24 @@ async def interactive_shell_tool(
 
 async def write_file_tool(file_path: str, content: str, overwrite: bool = True) -> str:
     return await toolset.write_file_tool(file_path, content, overwrite)
+
+# MCP tool wrappers (forward to tools.toolset)
+async def mcp_list_tools_tool(
+    server_command: str,
+    args: list[str] | None = None,
+    env: dict | None = None,
+) -> str:
+    return await toolset.mcp_list_tools_tool(server_command, args, env)
+
+
+async def mcp_call_tool_tool(
+    server_command: str,
+    tool: str,
+    arguments: dict | None = None,
+    args: list[str] | None = None,
+    env: dict | None = None,
+) -> str:
+    return await toolset.mcp_call_tool_tool(server_command, tool, arguments, args, env)
 
 class MuonryAssistant:
     def __init__(self):
@@ -800,6 +848,19 @@ class MuonryAssistant:
             }
         )
         
+        # Alias for normalized function/tool calling (no underscores) — permissive schema
+        self.client.register_tool(
+            name="quickcheck",
+            func=quickcheck_tool,
+            description="Alias of quick_check that accepts 'maxfiles' and 'timeoutms' parameter names.",
+            parameters={
+                "type": "object",
+                "properties": {},
+                "required": [],
+                "additionalProperties": True
+            }
+        )
+
         # Quick project/file checker (python | rust | js)
         self.client.register_tool(
             name="quick_check",
@@ -811,7 +872,9 @@ class MuonryAssistant:
                     "kind": {"type": "string", "enum": ["python", "rust", "js"], "description": "Type of project/file to check"},
                     "target": {"type": "string", "description": "Path to file or directory (default: .)"},
                     "max_files": {"type": "integer", "description": "Max files to scan for syntax (default: 200)"},
-                    "timeout_ms": {"type": "integer", "description": "Per-command timeout in ms (default: 120000)"}
+                    "timeout_ms": {"type": "integer", "description": "Per-command timeout in ms (default: 120000)"},
+                    "maxfiles": {"type": "integer", "description": "Alias of max_files"},
+                    "timeoutms": {"type": "integer", "description": "Alias of timeout_ms"}
                 },
                 "required": ["kind"],
                 "additionalProperties": False
@@ -853,6 +916,56 @@ class MuonryAssistant:
                     }
                 },
                 "required": ["file_path", "content"]
+            }
+        )
+
+        # MCP: list tools on an MCP server (stdio transport)
+        self.client.register_tool(
+            name="mcp_list_tools",
+            func=mcp_list_tools_tool,
+            description=(
+                "List tools exposed by an MCP server launched via stdio. "
+                "Returns a JSON string with a tools array."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "server_command": {"type": "string", "description": "Executable to launch the MCP server (e.g., 'uv')"},
+                    "args": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Optional argv for the server (e.g., ['run','server','fastmcp_quickstart','stdio'])"
+                    },
+                    "env": {"type": "object", "description": "Optional environment variables for the server process"}
+                },
+                "required": ["server_command"],
+                "additionalProperties": False
+            }
+        )
+
+        # MCP: call a tool on an MCP server (stdio transport)
+        self.client.register_tool(
+            name="mcp_call_tool",
+            func=mcp_call_tool_tool,
+            description=(
+                "Call a specific MCP tool exposed by a server launched via stdio. "
+                "Returns a JSON string with text/structured results."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "server_command": {"type": "string", "description": "Executable to launch the MCP server (e.g., 'uv')"},
+                    "tool": {"type": "string", "description": "Tool name to call"},
+                    "arguments": {"type": "object", "description": "Arguments for the tool (object)"},
+                    "args": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Optional argv for the server"
+                    },
+                    "env": {"type": "object", "description": "Optional environment variables for the server process"}
+                },
+                "required": ["server_command", "tool"],
+                "additionalProperties": False
             }
         )
         

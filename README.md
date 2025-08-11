@@ -17,23 +17,40 @@ Muonry is a **reliable, sequential AI coding assistant** built on Bhumi with opt
 
 ## 🚀 Quick Start
 
-1. **Set API Keys:**
+1. **Install (editable):**
+   ```bash
+   # create venv (example)
+   python -m venv .venv/muonry && source .venv/muonry/bin/activate
+
+   # install core (bhumi + satya included)
+   pip install -e .
+   # or with uv
+   # uv pip install -e .
+
+   # optional extras
+   # pip install -e ".[websearch]"   # Exa web search
+   # pip install -e ".[mcp]"         # MCP client
+   ```
+
+2. **Set API Keys:**
    ```bash
    export GROQ_API_KEY=your_groq_key
-   export CEREBRAS_API_KEY=your_cerebras_key  # Optional for multi-model
+   export CEREBRAS_API_KEY=your_cerebras_key  # Optional for planner/fallback
    export EXA_API_KEY=your_exa_key            # Optional for websearch tool
    export MUONRY_MAX_CONTEXT_CHARS=120000     # Optional: context cap (chars)
    ```
 
-2. **Run the Assistant:**
+3. **Run the Assistant:**
    ```bash
+   muonry           # recommended CLI
+   # or
    python assistant.py
    ```
 
 ## 💬 Usage
 
 ### Interactive Chat
-Simply run `python assistant.py` and start chatting! The assistant automatically handles:
+Run `muonry` (recommended) or `python assistant.py` and start chatting! The assistant automatically handles:
 
 **Simple Tasks** → Direct execution:
 ```

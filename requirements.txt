@@ -1,0 +1,4 @@
+python-dotenv>=1.0.0
+orjson>=3.9.0
+bhumi>=0.0.0
+satya>=0.2.16
