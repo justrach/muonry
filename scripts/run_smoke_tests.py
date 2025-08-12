@@ -188,6 +188,26 @@ async def main():
             )
         )
 
+    # Optional: Smithery MCP over HTTP (requires interactive OAuth on first use)
+    smithery_url = os.getenv("SMITHERY_SERVER_URL")
+    if smithery_url and sys.stdin.isatty():
+        def smithery_validator(s: str) -> bool:
+            # Consider PASS if we either got tools JSON or SDK isn't installed (optional extra)
+            if not isinstance(s, str):
+                return False
+            lowered = s.lower()
+            return ('"tools"' in s) or ("mcp sdk not installed" in lowered)
+
+        cases.append(
+            (
+                "smithery_list_tools",
+                toolset.smithery_list_tools_tool,
+                (smithery_url,),
+                {},
+                smithery_validator,
+            )
+        )
+
     results = []
     for name, fn, args, kwargs, validator in cases:
         ok = await run_case(name, fn, *args, validator=validator, **kwargs)

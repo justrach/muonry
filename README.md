@@ -115,6 +115,29 @@ Run `muonry` (recommended) or `python assistant.py` and start chatting! The assi
 - `websearch` returns compact JSON: title, url, published_date, author, snippet, and limited text.
 - If the provider returns a text block, the tool extracts Title/URL pairs to preserve clickable sources.
 
+### Smithery MCP (HTTP)
+- **Install MCP extra**:
+  ```bash
+  pip install -e ".[mcp]"   # or: pip install "mcp[cli]"
+  ```
+- **Set a server URL** (examples on Smithery):
+  ```bash
+  export SMITHERY_SERVER_URL="https://server.smithery.ai/exa/mcp"
+  # optional
+  export SMITHERY_CLIENT_NAME="Muonry CLI"
+  export SMITHERY_REDIRECT_URI="http://localhost:3000/callback"
+  export SMITHERY_SCOPE="user"
+  ```
+- **First run triggers OAuth**: you'll see an auth URL and be asked to paste the callback URL after authorizing in the browser.
+- **Token storage**: saved under `~/.muonry/smithery_tokens.json` and `~/.muonry/smithery_client.json` for reuse.
+- **Quick check** (interactive terminal required):
+  ```bash
+  python3 scripts/run_smoke_tests.py   # runs smithery_list_tools when SMITHERY_SERVER_URL is set
+  ```
+  Programmatic access is available via `tools/toolset.py`:
+  - `smithery_list_tools_tool(server_url)`
+  - `smithery_call_tool_tool(server_url, tool, arguments=None)`
+
 ---
 
 Muonry is a compact, reliable, sequential assistant. No multi-agent orchestration, no worker state—just focused tools and robust guardrails.

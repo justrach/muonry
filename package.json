@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "@smithery/cli": "^1.2.17"
+  }
+}

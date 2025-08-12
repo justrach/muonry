@@ -21,6 +21,10 @@ from tools.update_plan import load_plan, update_plan as do_update_plan, PlanItem
 from tools.build_analyzer import analyze_build_output, pick_package_manager
 
 from tools.mcp_client import mcp_list_tools as _mcp_list_tools, mcp_call_tool as _mcp_call_tool
+from tools.smithery_client import (
+    smithery_list_tools_http as _smithery_list_tools_http,
+    smithery_call_tool_http as _smithery_call_tool_http,
+)
 
 # --- Minimal helpers (no ANSI formatting to avoid dependency on assistant) ---
 
@@ -93,6 +97,7 @@ async def planner_tool(task: str, context: str = "") -> str:
 
         planning_config = LLMConfig(
             api_key=os.getenv("CEREBRAS_API_KEY"),
+            
             model="cerebras/qwen-3-235b-a22b-thinking-2507",
             debug=True,
         )
@@ -832,3 +837,28 @@ async def mcp_call_tool_tool(
         return await _mcp_call_tool(server_command, tool, arguments=arguments or {}, args=args, env=env)
     except Exception as e:
         return f"Error calling MCP tool '{tool}': {e}"
+
+
+# --- Smithery (Streamable HTTP MCP) wrappers ---
+async def smithery_list_tools_tool(server_url: str) -> str:
+    """List tools from a Smithery-hosted MCP server over Streamable HTTP.
+
+    Example server URLs:
+    - https://server.smithery.ai/exa/mcp
+    - https://server.smithery.ai/@smithery/notion/mcp
+    """
+    try:
+        return await _smithery_list_tools_http(server_url)
+    except Exception as e:
+        return f"Error listing Smithery tools: {e}"
+
+
+async def smithery_call_tool_tool(server_url: str, tool: str, arguments: dict | None = None) -> str:
+    """Call a tool on a Smithery-hosted MCP server over Streamable HTTP.
+
+    Returns a JSON string with keys: text, structured, and possibly raw.
+    """
+    try:
+        return await _smithery_call_tool_http(server_url, tool, arguments=arguments or {})
+    except Exception as e:
+        return f"Error calling Smithery tool '{tool}': {e}"
