@@ -1,14 +1,15 @@
-# Muonry – Simple Sequential AI Coding Assistant
+# Muonry – Parallel‑Capable AI Coding Assistant
 
-Muonry is a **reliable, sequential AI coding assistant** built on Bhumi with optional planning capabilities. The complex multi-agent orchestrator has been **removed** in favor of a clean, straightforward approach that actually works.
+Muonry is a **reliable AI coding assistant** built on Bhumi with optional planning and now **parallel tool calling**. It favors a clean, straightforward approach that actually works. It is also an **open‑sourced Claude Code–style** coding assistant.
 
 ## ✨ Key Features
 
-- **🎯 Sequential Execution** – Reliable step-by-step task completion
+- **⚡ Parallel Tool Calling** – Run multiple tools concurrently in one turn (enabled by default)
+- **🎯 Sequential Execution** – Reliable step-by-step execution when needed
 - **🧠 Optional Planning** – Cerebras-powered task breakdown for complex projects
 - **🔧 Rich Tool Set** – File operations, shell commands, code patching
 - **📋 Smart Planning** – AI-powered task decomposition with sequential execution
-- **⚡ No Concurrency Issues** – Simple, reliable execution without coordination failures
+- **🧵 Bounded Concurrency** – Semaphore-based limits with per-call progress updates
 - **📊 Compact Codebase** – 1,238 lines of focused, maintainable code
 - **🛡️ Rate‑Limit Fallback** – Automatically retries with a fallback model on rate limits
 - **🪓 Context Trimming** – Sliding‑window message trimming to avoid context overflow (~131k)
@@ -41,12 +42,12 @@ Simply run `python assistant.py` and start chatting! The assistant automatically
 🤖 Assistant: [reads file directly]
 ```
 
-**Complex Tasks** → Planning + Sequential execution:
+**Complex Tasks** → Planning + execution (parallel + sequential as appropriate):
 ```
 💬 You: Create 6 Fire Nation stories in a folder
 🧠 Planning task with 6 steps...
 📋 Plan created: 1. Create folder, 2-6. Generate stories
-💻 [Executes each step sequentially]
+💻 [Executes each step with the right mix of parallel + sequential]
 ```
 
 ### Available Tools
@@ -58,12 +59,38 @@ Simply run `python assistant.py` and start chatting! The assistant automatically
 - **Interactive Shell**: `interactive_shell` (PTY; scripted answers, env)
 - **Quick Checks**: `quick_check` (syntax/health checks)
 
-## 🎯 How the Sequential Approach Works
+### Parallel tool calling
+
+- Muonry can execute a batch of tools in parallel either when models return `tool_calls` or explicitly via the `parallel` tool.
+- Env flags:
+  - `MUONRY_PARALLEL_TOOLS` (default: 1)
+  - `MUONRY_PARALLEL_CONCURRENCY` (default: 5)
+  - `MUONRY_PARALLEL_TIMEOUT_MS` (default: 60000)
+
+Example using the `parallel` tool:
+
+```json
+{
+  "name": "parallel",
+  "arguments": {
+    "calls": [
+      {"name": "read_file", "arguments": {"file_path": "README.md"}},
+      {"name": "read_file", "arguments": {"file_path": "pyproject.toml"}},
+      {"name": "get_system_info", "arguments": {}}
+    ],
+    "concurrency": 3,
+    "timeout_ms": 60000
+  }
+}
+```
+
+## 🎯 Execution Model: Parallel + Sequential
 
 1. **Simple Detection**: AI recognizes simple vs complex tasks automatically
 2. **Optional Planning**: For complex tasks, uses Cerebras to break them into steps
-3. **Sequential Execution**: Executes each step in order using appropriate tools
-4. **Reliable Results**: No coordination issues, race conditions, or worker failures
+3. **Parallel where independent**: Independent tool calls are batched and run in parallel
+4. **Sequential where dependent**: Steps that depend on prior results are executed in order
+5. **Reliable Results**: Bounded concurrency, progress events, and fallbacks
 
 **Example Output:**
 ```
@@ -78,9 +105,10 @@ Simply run `python assistant.py` and start chatting! The assistant automatically
 
 ## 📊 Architecture
 
-### Core Components (sequential, no orchestrator)
-- **`assistant.py`** – Main sequential assistant. Handles chat loop, model fallback, and context trimming.
+### Core Components
+- **`assistant.py`** – Main assistant. Handles chat loop, model fallback, context trimming, and parallel integration (auto + `parallel` tool).
 - **`tools/toolset.py`** – Consolidated tool implementations (planner, shell, patching, file ops, quick checks, interactive shell, etc.).
+- **`tools/orchestratorv2.py`** – Provider‑agnostic parallel executor (`ParallelToolExecutor`) with progress callbacks.
 - **`tools/websearch.py`** – Exa-powered web search with structured JSON output and fallback Title/URL parsing.
 - **`tools/apply_patch.py`**, **`tools/shell.py`**, **`tools/update_plan.py`**, etc. – Supporting modules used by `toolset.py`.
 
@@ -100,4 +128,4 @@ Simply run `python assistant.py` and start chatting! The assistant automatically
 
 ---
 
-Muonry is a compact, reliable, sequential assistant. No multi-agent orchestration, no worker state—just focused tools and robust guardrails.
+Muonry is a compact, reliable assistant with first-class parallel tool calling and pragmatic guardrails.
