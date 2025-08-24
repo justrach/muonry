@@ -90,6 +90,7 @@ OS_INFO = f"{platform.system()} {platform.release()}"
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from bhumi.base_client import BaseLLMClient, LLMConfig
+from tools.orchestratorv2 import ParallelToolExecutor, ToolCallSpec
 
 # --- Settings helpers (persist API keys in ~/.muonry/.env) ---
 def _home_env_file() -> Path:
@@ -476,6 +477,20 @@ async def interactive_shell_tool(
 async def write_file_tool(file_path: str, content: str, overwrite: bool = True) -> str:
     return await toolset.write_file_tool(file_path, content, overwrite)
 
+# DeepWiki (naive)
+async def deepwiki_tool(
+    action: str = "list",
+    repo: str = "jennyzzt/dgm",
+    path: str | None = None,
+    limit: int = 50,
+    write_to: str | None = None,
+    writeto: str | None = None,
+) -> str:
+    dest = write_to or writeto
+    return await toolset.deepwiki_tool(action, repo, path, limit, dest)
+
+
+
 class MuonryAssistant:
     def __init__(self):
         self.client = None
@@ -489,6 +504,12 @@ class MuonryAssistant:
             self.max_context_chars = 120000
         # Track Ctrl-C presses for double-press-to-exit behavior
         self._last_interrupt_at: float = 0.0
+        # Parallel tools feature flags (enabled by default)
+        self._parallel_tools_enabled: bool = os.getenv("MUONRY_PARALLEL_TOOLS", "1") in {"1", "true", "True"}
+        try:
+            self._parallel_concurrency: int = int(os.getenv("MUONRY_PARALLEL_CONCURRENCY", "5"))
+        except Exception:
+            self._parallel_concurrency = 5
         
     async def setup(self):
         """Initialize the assistant with OpenRouter"""
@@ -558,8 +579,14 @@ class MuonryAssistant:
         # Switch to fallback model and retry once
         print(_warn(f"Rate limit encountered on {self.client.config.model if hasattr(self.client, 'config') else 'primary model'}; switching to {self.fallback_model} and retrying once..."))
         try:
-            api_key = os.getenv("GROQ_API_KEY")
-            fb_config = LLMConfig(api_key=api_key, model=self.fallback_model, debug=True)
+            # Use Cerebras' own key for the Cerebras fallback model
+            api_key = os.getenv("CEREBRAS_API_KEY")
+            fb_config = LLMConfig(
+                api_key=api_key,
+                model=self.fallback_model,
+                base_url="https://api.cerebras.ai/v1",
+                debug=True,
+            )
             self.client = BaseLLMClient(fb_config)
         except Exception as e:
             print(_error(f"Failed to switch to fallback model: {e}"))
@@ -619,6 +646,40 @@ class MuonryAssistant:
                     }
                 },
                 "required": ["command"],
+                "additionalProperties": False
+            }
+        )
+        
+        # Parallel batch tool: allow models to request concurrent execution explicitly
+        self.client.register_tool(
+            name="parallel",
+            func=self.parallel_tool,
+            description=(
+                "Execute multiple registered tools in parallel. Use when provider can't emit multi-tool calls natively. "
+                "Accepts an array of calls with {name, arguments, id?}."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "calls": {
+                        "type": "array",
+                        "description": "List of tool calls to run concurrently",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "name": {"type": "string", "description": "Registered tool name"},
+                                "arguments": {"type": "object", "description": "Arguments for the tool"},
+                                "id": {"type": "string", "description": "Optional call id for tracing"},
+                                "timeout_ms": {"type": "integer", "description": "Optional per-call timeout override"}
+                            },
+                            "required": ["name", "arguments"],
+                            "additionalProperties": False
+                        }
+                    },
+                    "concurrency": {"type": "integer", "description": "Max parallelism (default from env)"},
+                    "timeout_ms": {"type": "integer", "description": "Default per-call timeout in ms"}
+                },
+                "required": ["calls"],
                 "additionalProperties": False
             }
         )
@@ -855,6 +916,29 @@ class MuonryAssistant:
                 "required": ["file_path", "content"]
             }
         )
+
+        # DeepWiki (naive HTTP) tool
+        self.client.register_tool(
+            name="deepwiki",
+            func=deepwiki_tool,
+            description=(
+                "Naively interact with DeepWiki repo pages via HTTPS scraping (no MCP). "
+                "Supports 'list' (pages) and 'get' (page content). Default repo: jennyzzt/dgm."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "action": {"type": "string", "enum": ["list", "get"], "description": "Operation: list pages or get a page"},
+                    "repo": {"type": "string", "description": "DeepWiki repo in owner/name format", "default": "jennyzzt/dgm"},
+                    "path": {"type": "string", "description": "Path within the repo for 'get' (e.g., docs/overview)"},
+                    "limit": {"type": "integer", "description": "Max pages to list (for action=list)", "default": 50},
+                    "write_to": {"type": "string", "description": "Optional file path to save JSON or text output (preferred)"},
+                    "writeto": {"type": "string", "description": "Alias for write_to (back-compat)"}
+                },
+                "required": ["action"],
+                "additionalProperties": False
+            }
+        )
         
         # Simple Planner Tool (using Cerebras for complex task breakdown)
         self.client.register_tool(
@@ -879,6 +963,131 @@ class MuonryAssistant:
         
         print(_success("✅ Tools registered successfully!"))
         print(_style(f"🔍 Debug: Registered {len(self.client.tool_registry.get_definitions())} tools", color=_Ansi.BLUE, dim=True))
+        if self._parallel_tools_enabled:
+            print(_style(f"⚡ Parallel tool calling ENABLED (concurrency={self._parallel_concurrency})", color=_Ansi.GREEN, dim=True))
+        else:
+            print(_style("⚡ Parallel tool calling disabled (set MUONRY_PARALLEL_TOOLS=1 to enable)", color=_Ansi.YELLOW, dim=True))
+
+    # --- Parallel tool execution wiring (OpenAI-style tool_calls) ---
+    def _resolve_tool(self, name: str):
+        if not self.client or not hasattr(self.client, "tool_registry"):
+            return None
+        try:
+            return self.client.tool_registry.get_tool(name)
+        except Exception:
+            return None
+
+    async def _run_parallel_tool_calls(self, tool_calls: list[dict]) -> dict | None:
+        """Execute multiple OpenAI-style tool calls concurrently using ParallelToolExecutor.
+
+        tool_calls item shape (expected):
+        {"id": "call_...", "type": "function", "function": {"name": str, "arguments": str|dict}}
+        """
+        if not tool_calls:
+            return None
+
+        # Parse arguments safely
+        specs: list[ToolCallSpec] = []
+        for i, tc in enumerate(tool_calls):
+            fn = (tc or {}).get("function") or {}
+            name = str(fn.get("name") or "")
+            raw_args = fn.get("arguments", {})
+            args: dict
+            if isinstance(raw_args, str):
+                try:
+                    args = json.loads(raw_args) if raw_args.strip() else {}
+                except Exception:
+                    args = {}
+            elif isinstance(raw_args, dict):
+                args = dict(raw_args)
+            else:
+                args = {}
+            call_id = str(tc.get("id") or f"call_{i+1}")
+            specs.append(ToolCallSpec(tool_call_id=call_id, name=name, arguments=args))
+
+        execu = ParallelToolExecutor(self._resolve_tool)
+
+        async def _progress(update: dict):
+            t = update.get("type")
+            if t == "tool_state":
+                sid = update.get("tool_call_id")
+                nm = update.get("name")
+                st = update.get("state")
+                msg = f"[tool {nm}#{sid}] {st}"
+                if st == "error" and update.get("error"):
+                    msg += f": {update.get('error')}"
+                print(_style(msg, color=_Ansi.BLUE, dim=True))
+            elif t == "batch_done":
+                print(_style(f"Batch done: ok={update.get('ok')} errors={update.get('errors')}", color=_Ansi.BLUE, dim=True))
+
+        try:
+            agg = await execu.execute(
+                specs,
+                permission_cb=None,  # default auto-approve; policy can be added later
+                progress_cb=_progress,
+                concurrency=self._parallel_concurrency,
+                default_timeout_ms=int(os.getenv("MUONRY_PARALLEL_TIMEOUT_MS", "60000")),
+            )
+            return agg
+        except Exception as e:
+            print(_error(f"Parallel tool execution failed: {e}"))
+            return None
+
+    # A tool the model can call directly to request parallel execution without native multi-tool support
+    async def parallel_tool(self, calls: list[dict], concurrency: int | None = None, timeout_ms: int | None = None) -> str:
+        """Run multiple registered tools in parallel.
+
+        calls: [{"name": str, "arguments": object, "id"?: str, "timeout_ms"?: int}]
+        concurrency: override global concurrency
+        timeout_ms: default per-call timeout
+        """
+        # Normalize to OpenAI-like list
+        norm: list[dict] = []
+        for i, c in enumerate(calls or []):
+            if not isinstance(c, dict):
+                continue
+            name = str(c.get("name") or "")
+            args = c.get("arguments")
+            if not isinstance(args, dict):
+                try:
+                    args = json.loads(args) if isinstance(args, str) else {}
+                except Exception:
+                    args = {}
+            cid = str(c.get("id") or f"call_{i+1}")
+            norm.append({
+                "id": cid,
+                "type": "function",
+                "function": {"name": name, "arguments": args},
+            })
+
+        # Temporarily override concurrency/timeout if provided
+        prev_conc = self._parallel_concurrency
+        if isinstance(concurrency, int) and concurrency > 0:
+            self._parallel_concurrency = concurrency
+        os.environ.setdefault("MUONRY_PARALLEL_TIMEOUT_MS", str(timeout_ms or int(os.getenv("MUONRY_PARALLEL_TIMEOUT_MS", "60000"))))
+
+        try:
+            agg = await self._run_parallel_tool_calls(norm)
+        finally:
+            self._parallel_concurrency = prev_conc
+
+        if not agg:
+            return "Parallel execution failed"
+        # Compact human-readable summary
+        summary = agg.get("summary") or {}
+        results = agg.get("results") or []
+        lines = [
+            "✅ Parallel execution finished",
+            f"Total: {summary.get('total')}  OK: {summary.get('ok')}  Errors: {summary.get('errors')}",
+        ]
+        for r in results[:10]:
+            nm = r.get("name")
+            cid = r.get("tool_call_id")
+            if r.get("ok"):
+                lines.append(f"- {nm}#{cid}: ok ({r.get('duration_ms')}ms)")
+            else:
+                lines.append(f"- {nm}#{cid}: error ({r.get('error')})")
+        return "\n".join(lines)
     
     async def interactive_loop(self):
         """Main conversational loop"""
@@ -1007,6 +1216,30 @@ Current Datetime: {now_str}
 
                 # Get response from assistant (with rate-limit fallback)
                 response = await self._completion_with_fallback(conversation.copy())
+
+                # If model emitted multiple tool calls (OpenAI-style), run them in parallel
+                if self._parallel_tools_enabled and isinstance(response, dict):
+                    tc_list = response.get("tool_calls") or []
+                    if isinstance(tc_list, list) and len(tc_list) >= 1:
+                        print(_style("\n⚡ Executing tool calls in parallel...", color=_Ansi.CYAN, bold=True))
+                        agg = await self._run_parallel_tool_calls(tc_list)
+                        if agg:
+                            # Print concise summary and inject a brief assistant message for transcript clarity
+                            summary = agg.get("summary") or {}
+                            results = agg.get("results") or []
+                            lines = ["### Parallel tool results", f"- Total: {summary.get('total')}", f"- OK: {summary.get('ok')}", f"- Errors: {summary.get('errors')}"]
+                            for r in results[:10]:  # cap to keep output tidy
+                                status = r.get("state")
+                                nm = r.get("name")
+                                cid = r.get("tool_call_id")
+                                if r.get("ok"):
+                                    lines.append(f"- {nm}#{cid}: ok ({r.get('duration_ms')}ms)")
+                                else:
+                                    lines.append(f"- {nm}#{cid}: error ({r.get('error')})")
+                            assistant_message = "\n".join(lines)
+                            print(_style("\n Muonry :>>", color=_Ansi.MAGENTA, bold=True))
+                            print(render_markdown_to_ansi(assistant_message))
+                            conversation.append({"role": "assistant", "content": assistant_message})
 
                 if response and 'text' in response:
                     assistant_message = response['text']

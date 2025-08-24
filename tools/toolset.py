@@ -19,6 +19,7 @@ from tools.apply_patch import apply_patch as do_apply_patch
 from tools.shell import run_shell, ShellRequest
 from tools.update_plan import load_plan, update_plan as do_update_plan, PlanItem, Status
 from tools.build_analyzer import analyze_build_output, pick_package_manager
+from tools.deepwiki import list_pages as deepwiki_list_pages, get_page as deepwiki_get_page
 
 # --- Minimal helpers (no ANSI formatting to avoid dependency on assistant) ---
 
@@ -99,6 +100,7 @@ async def planner_tool(task: str, context: str = "") -> str:
         planning_config = LLMConfig(
             api_key=os.getenv("CEREBRAS_API_KEY"),
             model="cerebras/qwen-3-235b-a22b-thinking-2507",
+            base_url="https://api.cerebras.ai/v1",
             debug=True,
         )
         planning_client = BaseLLMClient(planning_config)
@@ -808,3 +810,49 @@ async def write_file_tool(file_path: str, content: str, overwrite: bool = True) 
         return f"Successfully wrote {len(content)} characters to {file_path}"
     except Exception as e:
         return f"Error writing file {file_path}: {str(e)}"
+
+
+# --- DeepWiki (naive HTTP) ---
+async def deepwiki_tool(
+    action: str = "list",
+    repo: str = "jennyzzt/dgm",
+    path: str | None = None,
+    limit: int = 50,
+    write_to: str | None = None,
+    writeto: str | None = None,
+) -> str:
+    try:
+        # Normalize legacy alias
+        dest = write_to or writeto
+        action_l = (action or "list").lower().strip()
+        if action_l == "list":
+            res = deepwiki_list_pages(repo=repo, limit=limit)
+            if dest and isinstance(res, dict):
+                try:
+                    p = Path(dest)
+                    p.parent.mkdir(parents=True, exist_ok=True)
+                    p.write_text(json.dumps(res, indent=2), encoding="utf-8")
+                    res["saved_to"] = str(p)
+                except Exception as ioe:
+                    res["save_error"] = str(ioe)
+            return json.dumps(res)
+        elif action_l == "get":
+            res = deepwiki_get_page(repo=repo, path=path)
+            if dest and isinstance(res, dict):
+                try:
+                    p = Path(dest)
+                    p.parent.mkdir(parents=True, exist_ok=True)
+                    # Prefer text content when present
+                    content = res.get("text") if isinstance(res, dict) else None
+                    if isinstance(content, str):
+                        p.write_text(content, encoding="utf-8")
+                    else:
+                        p.write_text(json.dumps(res, indent=2), encoding="utf-8")
+                    res["saved_to"] = str(p)
+                except Exception as ioe:
+                    res["save_error"] = str(ioe)
+            return json.dumps(res)
+        else:
+            return json.dumps({"status": "error", "error": f"unknown action: {action}"})
+    except Exception as e:
+        return json.dumps({"status": "error", "error": str(e)})
