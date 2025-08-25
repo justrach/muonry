@@ -91,6 +91,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from bhumi.base_client import BaseLLMClient, LLMConfig
 from tools.orchestratorv2 import ParallelToolExecutor, ToolCallSpec
+from muonry.clients import StrictLLMClient
 
 # --- Settings helpers (persist API keys in ~/.muonry/.env) ---
 def _home_env_file() -> Path:
@@ -510,6 +511,12 @@ class MuonryAssistant:
             self._parallel_concurrency: int = int(os.getenv("MUONRY_PARALLEL_CONCURRENCY", "5"))
         except Exception:
             self._parallel_concurrency = 5
+        # Strict tools mode: reject unregistered tools in both single and parallel execution paths
+        try:
+            _strict_raw = str(os.getenv("MUONRY_STRICT_TOOLS", "0")).strip().lower()
+            self._strict_tools_mode: bool = _strict_raw in {"1", "true", "yes", "on"}
+        except Exception:
+            self._strict_tools_mode = False
         
     async def setup(self):
         """Initialize the assistant with OpenRouter"""
@@ -526,8 +533,12 @@ class MuonryAssistant:
             debug=True
         )
         
-        self.client = BaseLLMClient(config)
+        # Choose client based on strict tools setting
+        ClientCls = StrictLLMClient if self._strict_tools_mode else BaseLLMClient
+        self.client = ClientCls(config)
         await self.register_tools()
+        if self._strict_tools_mode:
+            print(_style("🔒 Strict tools mode ENABLED: unregistered tools will be rejected", color=_Ansi.YELLOW, dim=True))
         return True
 
     async def _completion_with_fallback(self, messages: list[dict]) -> dict:
@@ -1020,10 +1031,19 @@ class MuonryAssistant:
             elif t == "batch_done":
                 print(_style(f"Batch done: ok={update.get('ok')} errors={update.get('errors')}", color=_Ansi.BLUE, dim=True))
 
+        # Permission callback: when strict mode is on, reject unregistered tools
+        async def _permit(spec: ToolCallSpec) -> bool:
+            if not self._strict_tools_mode:
+                return True
+            try:
+                return self._resolve_tool(spec.name) is not None
+            except Exception:
+                return False
+
         try:
             agg = await execu.execute(
                 specs,
-                permission_cb=None,  # default auto-approve; policy can be added later
+                permission_cb=_permit if self._strict_tools_mode else None,
                 progress_cb=_progress,
                 concurrency=self._parallel_concurrency,
                 default_timeout_ms=int(os.getenv("MUONRY_PARALLEL_TIMEOUT_MS", "60000")),

@@ -1,5 +1,7 @@
 # Muonry – Parallel‑Capable AI Coding Assistant
 
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/justrach/muonry)
+
 Muonry is a **reliable AI coding assistant** built on Bhumi with optional planning and now **parallel tool calling**. It favors a clean, straightforward approach that actually works. It is also an **open‑sourced Claude Code–style** coding assistant.
 
 ## ✨ Key Features

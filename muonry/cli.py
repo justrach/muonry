@@ -196,6 +196,13 @@ def _ensure_home_env() -> None:
 def main() -> None:
     """Console entry point for Muonry assistant."""
     _ensure_home_env()
+    # Briefly surface strict tools mode if requested via env so users see it from CLI too
+    try:
+        truthy = {"1", "true", "yes", "on"}
+        if str(os.getenv("MUONRY_STRICT_TOOLS", "")).strip().lower() in truthy:
+            print("\U0001F512 Strict tools mode requested via MUONRY_STRICT_TOOLS (unregistered tools will be rejected)")
+    except Exception:
+        pass
     # Import after env is ensured
     from assistant import main as assistant_main  # type: ignore
     try:
