@@ -86,6 +86,48 @@ def _error(msg: str) -> str:
 # Get OS info at startup
 OS_INFO = f"{platform.system()} {platform.release()}"
 
+# --- Lightweight terminal animations (spinner + type-out) ---
+async def type_out(text: str, delay: float = 0.015, chunk_size: int = 64) -> None:
+    """Print text with a fake typing effect.
+
+    Optimized for speed without streaming: writes in chunks instead of per-char.
+    If delay <= 0, prints as fast as possible using chunked flushes. Caller should
+    add a trailing newline after calling if needed.
+    """
+    n = len(text)
+    if chunk_size <= 0:
+        chunk_size = 64
+    if delay <= 0:
+        # Ultra-fast path: chunked flush without sleeps
+        i = 0
+        while i < n:
+            j = min(i + chunk_size, n)
+            print(text[i:j], end="", flush=True)
+            i = j
+            # Yield occasionally to keep UI responsive on very large outputs
+            if (i // chunk_size) % 32 == 0:
+                await asyncio.sleep(0)
+        return
+    # Small delay path: sleep once per chunk (much faster than per-char)
+    i = 0
+    while i < n:
+        j = min(i + chunk_size, n)
+        print(text[i:j], end="", flush=True)
+        i = j
+        await asyncio.sleep(delay)
+
+
+async def spinner(stop_event: asyncio.Event, prefix: str = "Thinking ") -> None:
+    """Render a simple spinner until stop_event is set."""
+    glyphs = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+    i = 0
+    while not stop_event.is_set():
+        print(f"\r{prefix}{glyphs[i % len(glyphs)]}", end="", flush=True)
+        i += 1
+        await asyncio.sleep(0.08)
+    # clear the line
+    print("\r" + " " * (len(prefix) + 2) + "\r", end="", flush=True)
+
 # Add parent/src to path for bhumi import
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
@@ -517,6 +559,20 @@ class MuonryAssistant:
             self._strict_tools_mode: bool = _strict_raw in {"1", "true", "yes", "on"}
         except Exception:
             self._strict_tools_mode = False
+        # Animations (spinner + type-out)
+        try:
+            _anim_raw = str(os.getenv("MUONRY_ANIMATIONS", "1")).strip().lower()
+            self._animations_enabled: bool = (_anim_raw in {"1", "true", "yes", "on"}) and sys.stdout.isatty()
+        except Exception:
+            self._animations_enabled = False
+        try:
+            self._type_delay: float = float(os.getenv("MUONRY_TYPE_DELAY", "0"))
+        except Exception:
+            self._type_delay = 0.0
+        try:
+            self._type_chunk_size: int = int(os.getenv("MUONRY_TYPE_CHUNK", "128"))
+        except Exception:
+            self._type_chunk_size = 128
         
     async def setup(self):
         """Initialize the assistant with OpenRouter"""
@@ -530,7 +586,7 @@ class MuonryAssistant:
         config = LLMConfig(
             api_key=api_key,
             model=self.primary_model,  # Primary model via Groq
-            debug=True
+            # debug=True
         )
         
         # Choose client based on strict tools setting
@@ -582,8 +638,18 @@ class MuonryAssistant:
                 pass
             return False
 
-        # First attempt with current client/model
-        resp = await _call()
+        # First attempt with current client/model (show spinner if enabled)
+        if self._animations_enabled:
+            _stop = asyncio.Event()
+            _task = asyncio.create_task(spinner(_stop, prefix="Thinking "))
+            try:
+                resp = await _call()
+            finally:
+                _stop.set()
+                with contextlib.suppress(Exception):
+                    await _task
+        else:
+            resp = await _call()
         if not _is_rate_limit(resp):
             return resp
 
@@ -596,13 +662,24 @@ class MuonryAssistant:
                 api_key=api_key,
                 model=self.fallback_model,
                 base_url="https://api.cerebras.ai/v1",
-                debug=True,
+                # debug=True,
             )
             self.client = BaseLLMClient(fb_config)
         except Exception as e:
             print(_error(f"Failed to switch to fallback model: {e}"))
             return resp
-        return await _call()
+        if self._animations_enabled:
+            _stop2 = asyncio.Event()
+            _task2 = asyncio.create_task(spinner(_stop2, prefix="Retrying with fallback "))
+            try:
+                resp2 = await _call()
+            finally:
+                _stop2.set()
+                with contextlib.suppress(Exception):
+                    await _task2
+            return resp2
+        else:
+            return await _call()
         
     async def register_tools(self):
         """Register coding tools with Bhumi"""
@@ -1258,14 +1335,24 @@ Current Datetime: {now_str}
                                     lines.append(f"- {nm}#{cid}: error ({r.get('error')})")
                             assistant_message = "\n".join(lines)
                             print(_style("\n Muonry :>>", color=_Ansi.MAGENTA, bold=True))
-                            print(render_markdown_to_ansi(assistant_message))
+                            rendered = render_markdown_to_ansi(assistant_message)
+                            if self._animations_enabled:
+                                await type_out(rendered, delay=self._type_delay, chunk_size=self._type_chunk_size)
+                                print("")  # ensure newline after typing
+                            else:
+                                print(rendered)
                             conversation.append({"role": "assistant", "content": assistant_message})
 
                 if response and 'text' in response:
                     assistant_message = response['text']
                     # Pretty-print Markdown response in terminal
                     print(_style("\n Muonry :>>", color=_Ansi.MAGENTA, bold=True))
-                    print(render_markdown_to_ansi(assistant_message))
+                    rendered = render_markdown_to_ansi(assistant_message)
+                    if self._animations_enabled:
+                        await type_out(rendered, delay=self._type_delay, chunk_size=self._type_chunk_size)
+                        print("")
+                    else:
+                        print(rendered)
                     conversation.append({"role": "assistant", "content": assistant_message})
 
                 # Keep conversation manageable

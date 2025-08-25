@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "muonry"
-version = "0.1.6"
+version = "0.1.7"
 description = "Muonry - Sequential AI coding assistant with planning, websearch, and resilient fallbacks"
 readme = "README.md"
 authors = [{ name = "Muonry Contributors" }]
@@ -13,7 +13,7 @@ license = { file = "LICENSE" }
 dependencies = [
   "python-dotenv>=1.0.0",
   "orjson>=3.9.0",
-  "bhumi>=0.4.1",
+  "bhumi>=0.4.2",
 ]
 keywords = ["ai", "assistant", "coding", "cli", "llm"]
 classifiers = [

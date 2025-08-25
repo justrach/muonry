@@ -101,7 +101,7 @@ async def planner_tool(task: str, context: str = "") -> str:
             api_key=os.getenv("CEREBRAS_API_KEY"),
             model="cerebras/qwen-3-235b-a22b-thinking-2507",
             base_url="https://api.cerebras.ai/v1",
-            debug=True,
+            # debug=True,
         )
         planning_client = BaseLLMClient(planning_config)
 
