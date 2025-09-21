@@ -1,4 +1,17 @@
+'use client';
+import { useState, useEffect } from 'react';
+
 export default function Home() {
+  const [videoLoaded, setVideoLoaded] = useState(false);
+  const [githubStars, setGithubStars] = useState<number | null>(null);
+
+  useEffect(() => {
+    // Fetch GitHub stars
+    fetch('https://api.github.com/repos/justrach/muonry')
+      .then(res => res.json())
+      .then(data => setGithubStars(data.stargazers_count));
+  }, []);
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       {/* Top Nav */}
@@ -10,12 +23,18 @@ export default function Home() {
               MUONRY
             </a>
           </div>
-          <nav className="flex items-center gap-3 text-sm">
+          <nav className="flex items-center gap-3 text-sm" role="navigation" aria-label="Main navigation">
+            {githubStars && (
+              <span className="text-xs text-muted-foreground font-jetbrains">
+                ★ {githubStars.toLocaleString()}
+              </span>
+            )}
             <a
               href="https://github.com/justrach/muonry"
               target="_blank"
               rel="noreferrer"
-              className="btn btn-outline gap-1 px-3 py-1.5"
+              className="btn btn-outline gap-1 px-3 py-1.5 sm:px-4 sm:py-2 touch-manipulation"
+              aria-label="View Muonry on GitHub"
             >
               <span>GitHub</span>
               <span aria-hidden>★</span>
@@ -24,11 +43,16 @@ export default function Home() {
               href="https://github.com/justrach/muonry#readme"
               target="_blank"
               rel="noreferrer"
-              className="btn btn-outline px-3 py-1.5"
+              className="btn btn-outline px-3 py-1.5 sm:px-4 sm:py-2 touch-manipulation"
+              aria-label="Read Muonry documentation"
             >
               Docs
             </a>
-            <a href="/about" className="btn btn-outline px-3 py-1.5">
+            <a
+              href="/about"
+              className="btn btn-outline px-3 py-1.5 sm:px-4 sm:py-2 touch-manipulation"
+              aria-label="Learn more about Muonry"
+            >
               About
             </a>
 
@@ -37,11 +61,11 @@ export default function Home() {
       </header>
 
       {/* Hero */}
-      <main className="mx-auto max-w-6xl px-6 py-12 md:py-20">
+      <main className="mx-auto max-w-6xl px-4 sm:px-6 py-8 sm:py-12 md:py-20">
         <section className="grid grid-cols-1 md:grid-cols-2 gap-10 items-center">
           {/* Copy */}
           <div>
-            <h1 className="mt-4 text-4xl md:text-5xl font-plex font-semibold leading-tight">
+            <h1 className="mt-4 text-3xl sm:text-4xl md:text-5xl font-plex font-semibold leading-tight">
               The Open Source <span className="text-gradient-cm">Coding Agent</span>
             </h1>
             <p className="mt-4 text-sm md:text-base text-muted-foreground font-jetbrains">
@@ -52,13 +76,15 @@ export default function Home() {
                 href="https://github.com/justrach/muonry"
                 target="_blank"
                 rel="noreferrer"
-                className="btn btn-gradient"
+                className="btn btn-gradient px-4 py-2 sm:px-6 sm:py-3 text-sm sm:text-base font-medium transition-all duration-200 hover:scale-105 hover:shadow-lg"
+                aria-label="Get started with Muonry - View installation instructions on GitHub"
               >
                 Get Started
               </a>
               <a
                 href="#video"
-                className="btn btn-outline"
+                className="btn btn-outline px-4 py-2 sm:px-6 sm:py-3 text-sm sm:text-base transition-all duration-200 hover:scale-105"
+                aria-label="Watch demo video showing Muonry in action"
               >
                 ▶ Watch Video
               </a>
@@ -68,13 +94,27 @@ export default function Home() {
           {/* Video */}
           <div id="video" className="relative">
             <div className="relative aspect-video w-full overflow-hidden rounded-xl border border-border">
+              {!videoLoaded && (
+                <div className="absolute inset-0 bg-muted animate-pulse rounded-xl flex items-center justify-center">
+                  <div className="text-center">
+                    <div className="w-16 h-16 bg-muted-foreground/20 rounded-full mx-auto mb-4 flex items-center justify-center">
+                      <span className="text-2xl">▶</span>
+                    </div>
+                    <p className="text-sm text-muted-foreground">Loading demo video...</p>
+                  </div>
+                </div>
+              )}
               <video
                 src="https://images.muonry.com/muon2.mp4"
-                className="h-full w-full object-cover"
+                className={`h-full w-full object-cover transition-opacity duration-300 ${videoLoaded ? 'opacity-100' : 'opacity-0'}`}
                 autoPlay
                 muted
                 loop
                 playsInline
+                onLoadedData={() => setVideoLoaded(true)}
+                poster="/video-poster.jpg"
+                preload="metadata"
+                aria-label="Demo video showing Muonry in action"
               />
               <div className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-background/80 to-transparent" />
             </div>
@@ -115,21 +155,21 @@ export default function Home() {
         {/* Key Features */}
         <section className="mt-16 border-t border-border/60 pt-10">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="rounded-lg border border-border p-5">
+            <div className="rounded-lg border border-border p-5 transition-all duration-200 hover:border-cyan-400 hover:shadow-lg hover:shadow-cyan-400/20">
               <div className="text-2xl">⚡</div>
               <h3 className="mt-2 font-semibold font-plex">Fast & Lightweight</h3>
               <p className="mt-1 text-sm text-muted-foreground">
                 Built for low latency and minimal resources — written in Rust, with a tiny surface area you can reason about.
               </p>
             </div>
-            <div className="rounded-lg border border-border p-5">
+            <div className="rounded-lg border border-border p-5 transition-all duration-200 hover:border-cyan-400 hover:shadow-lg hover:shadow-cyan-400/20">
               <div className="text-2xl">🔍</div>
               <h3 className="mt-2 font-semibold font-plex">Fully Transparent</h3>
               <p className="mt-1 text-sm text-muted-foreground">
                 100% open source. No hidden APIs.
               </p>
             </div>
-            <div className="rounded-lg border border-border p-5">
+            <div className="rounded-lg border border-border p-5 transition-all duration-200 hover:border-cyan-400 hover:shadow-lg hover:shadow-cyan-400/20">
               <div className="text-2xl">🔗</div>
               <h3 className="mt-2 font-semibold font-plex">Extensible</h3>
               <p className="mt-1 text-sm text-muted-foreground">
@@ -253,16 +293,17 @@ export default function Home() {
         </section>
 
         {/* Final CTA */}
-        <section className="mt-16 mb-20 rounded-xl border border-border p-8 text-center">
+        <section className="mt-16 mb-20 rounded-xl border border-border p-6 sm:p-8 text-center">
           <p className="text-lg md:text-xl font-medium">
             Muonry is open to everyone — start coding with your AI partner today.
           </p>
-          <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
+          <div className="mt-5 flex flex-col sm:flex-row items-center justify-center gap-3">
             <a
               href="https://github.com/justrach/muonry"
               target="_blank"
               rel="noreferrer"
-              className="btn btn-gradient"
+              className="btn btn-gradient px-6 py-3 text-base font-medium transition-all duration-200 hover:scale-105 hover:shadow-lg w-full sm:w-auto"
+              aria-label="Install Muonry from GitHub"
             >
               Install Now
             </a>
@@ -270,7 +311,8 @@ export default function Home() {
               href="https://github.com/justrach/muonry"
               target="_blank"
               rel="noreferrer"
-              className="btn btn-outline"
+              className="btn btn-outline px-6 py-3 text-base transition-all duration-200 hover:scale-105 w-full sm:w-auto"
+              aria-label="Star Muonry on GitHub"
             >
               Star on GitHub
             </a>

@@ -1,0 +1,11 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /_next/
+Disallow: /admin/
+
+# Sitemap
+Sitemap: https://muonry.com/sitemap.xml
+
+# Crawl delay (optional)
+Crawl-delay: 1

@@ -29,16 +29,21 @@ export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
     template: "%s - Muonry",
-    default: "Muonry - Terminal-first AI coding agent",
+    default: "Muonry - Open Source AI Coding Assistant | LLMCompiler Enhanced",
   },
   description:
-    "A transparent, hackable AI coding agent built in under 1200 lines of code. Open source, free, and privacy-first.",
+    "Muonry is a transparent, fast, and fully controllable AI coding assistant. Built in <1200 lines with LLMCompiler-enhanced parallel tool calling. Open source and extensible.",
   keywords: [
-    "AI coding agent",
-    "open source agent",
+    "AI coding assistant",
+    "open source",
+    "LLMCompiler",
+    "parallel tool calling",
     "developer tools",
+    "code generation",
+    "automation",
+    "terminal-first",
     "transparent AI",
-    "coding assistant",
+    "coding agent",
   ],
   authors: [{ name: "Muonry" }],
   creator: "Muonry",
@@ -54,29 +59,40 @@ export const metadata: Metadata = {
     },
   },
   icons: {
-    // Use classic .ico as the favicon, per request
     icon: "/favicon.ico",
   },
   alternates: {
     canonical: "/",
   },
   openGraph: {
-    title: "Muonry - Terminal-first AI coding agent",
+    title: "Muonry - Open Source AI Coding Assistant",
     description:
-      "A transparent, hackable AI coding agent built in under 1200 lines of code. Open source, free, and privacy-first.",
+      "Transparent, fast AI coding assistant with LLMCompiler-enhanced parallel tool calling. Built in <1200 lines.",
     type: "website",
     url: siteUrl,
+    images: [
+      {
+        url: "https://images.muonry.com/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "Muonry - Open Source AI Coding Assistant",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Muonry - Terminal-first AI coding agent",
+    title: "Muonry - Open Source AI Coding Assistant",
     description:
-      "A transparent, hackable AI coding agent built in under 1200 lines of code.",
+      "Transparent, fast AI coding assistant with LLMCompiler-enhanced parallel tool calling. Built in <1200 lines.",
+    images: ["https://images.muonry.com/og-image.png"],
   },
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#ffffff" },
     { media: "(prefers-color-scheme: dark)", color: "#0b1220" },
   ],
+  other: {
+    "google-site-verification": "your-google-verification-code", // Add your actual verification code
+  },
 };
 
 export default function RootLayout({
